@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>产品净含量数据汇总</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f3f4f6;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header h1 { font-size: 22px; }
+        .header-stats {
+            display: flex;
+            gap: 24px;
+            font-size: 13px;
+        }
+        .header-stats span { opacity: 0.9; }
+        .header-stats strong { font-size: 18px; margin-left: 4px; }
+        .toolbar {
+            background: white;
+            padding: 16px 30px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .toolbar input, .toolbar select {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+            min-width: 140px;
+        }
+        .toolbar input:focus, .toolbar select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .filter-group label {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-info { background: #3b82f6; color: white; }
+        .btn-info:hover { background: #2563eb; }
+        .btn-warning { background: #f59e0b; color: white; }
+        .btn-warning:hover { background: #d97706; }
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        .btn-secondary:hover { background: #e5e7eb; }
+        .table-container {
+            padding: 20px 30px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 10px;
+            text-align: center;
+            font-weight: 600;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        th:first-child { border-radius: 10px 0 0 0; }
+        th:last-child { border-radius: 0 10px 0 0; }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #f3f4f6;
+            text-align: center;
+            color: #374151;
+        }
+        tr:hover td { background: #f9fafb; }
+        tr:nth-child(even) td { background: #fafafa; }
+        tr:nth-child(even):hover td { background: #f3f4f6; }
+        .number-cell { font-family: 'SF Mono', Monaco, monospace; text-align: right; }
+        .empty-cell { color: #9ca3af; font-style: italic; }
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #6b7280;
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 14px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            font-size: 13px;
+            transform: translateX(400px);
+            transition: transform 0.3s;
+            z-index: 1000;
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: #10b981; }
+        .toast.error { background: #ef4444; }
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #6b7280;
+        }
+        .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            padding: 20px;
+        }
+        .pagination button {
+            padding: 6px 12px;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .pagination button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+        .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>📊 产品净含量数据汇总</h1>
+        </div>
+        <div class="header-stats">
+            <span>总记录数<strong id="totalCount">0</strong></span>
+            <span>商标数<strong id="trademarkCount">0</strong></span>
+            <span>产品数<strong id="productCount">0</strong></span>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <input type="text" id="searchInput" placeholder="🔍 搜索产品名称/商标/规格/序号...">
+        
+        <div class="filter-group">
+            <label>品牌</label>
+            <select id="filterBrand">
+                <option value="">全部品牌</option>
+                <option value="春光">🌿 春光</option>
+                <option value="代加工">🏭 代加工</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label>包装</label>
+            <select id="filterPackage">
+                <option value="">全部包装</option>
+                <option value="纸包">📄 纸包</option>
+                <option value="PET">🥤 PET</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label>规格</label>
+            <select id="filterSpec">
+                <option value="">全部规格</option>
+            </select>
+        </div>
+        
+        <button class="btn btn-secondary" onclick="clearFilters()">🔄 清空筛选</button>
+        <button class="btn btn-primary" onclick="loadData()">🔄 刷新数据</button>
+        <button class="btn btn-success" onclick="exportCSV()">📄 导出 CSV</button>
+        <button class="btn btn-info" onclick="exportExcel()">📊 导出 Excel</button>
+        <a href="index.html" class="btn btn-warning" style="text-decoration:none;">🏠 返回首页</a>
+    </div>
+
+    <div class="table-container">
+        <div id="loadingState" class="loading">
+            <div class="loading-spinner"></div>
+            <p>正在加载数据...</p>
+        </div>
+        <div id="emptyState" class="empty-state" style="display:none;">
+            <div class="empty-state-icon">📭</div>
+            <p>暂无数据，请先录入产品信息</p>
+        </div>
+        <table id="dataTable" style="display:none;">
+            <thead>
+                <tr>
+                    <th>序号</th>
+                    <th>品牌</th>
+                    <th>商标</th>
+                    <th>产品名称</th>
+                    <th>规格</th>
+                    <th>包装</th>
+                    <th>单瓶(mL)</th>
+                    <th>密度</th>
+                    <th>净重(g)</th>
+                    <th>空瓶(g)</th>
+                    <th>纸盒(g)</th>
+                    <th>氮气(g)</th>
+                    <th>毛重无盖(g)</th>
+                    <th>盖子(g)</th>
+                    <th>PET毛重(g)</th>
+                    <th>喷胶(g)</th>
+                    <th>收缩膜(g)</th>
+                    <th>吸管(g)</th>
+                    <th>整瓶毛重(g)</th>
+                    <th>彩箱(g)</th>
+                    <th>珍珠棉(g)</th>
+                    <th>手提扣(g)</th>
+                    <th>引流卡(g)</th>
+                    <th>纸箱(g)</th>
+                    <th>整箱毛重(kg)</th>
+                    <th>备注</th>
+                    <th>更新时间</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://qtwwwsnhvcmsrjwlIkui.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_izDCkTnyQPE9xVl2TEBL3g_brortZPS';
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let allData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        const pageSize = 50;
+
+        const columns = [
+            'serial_no', 'brand', 'trademark', 'product_name', 'product_spec', 'package_type',
+            'single_bottle_ml', 'density', 'single_bottle_net_weight', 'empty_bottle_g',
+            'paper_box_g', 'nitrogen_g', 'single_bottle_gross_no_cap', 'cap_g',
+            'single_bottle_gross_pet', 'glue_g', 'shrink_film_g', 'straw_g',
+            'whole_bottle_gross_g', 'color_box_g', 'pearl_cotton_g', 'handle_g',
+            'guide_card_g', 'carton_g', 'whole_box_gross_kg', 'remarks', 'created_at'
+        ];
+
+        const columnLabels = {
+            serial_no: '序号', brand: '品牌', trademark: '商标', product_name: '产品名称',
+            product_spec: '规格', package_type: '包装', single_bottle_ml: '单瓶(mL)',
+            density: '密度', single_bottle_net_weight: '净重(g)', empty_bottle_g: '空瓶(g)',
+            paper_box_g: '纸盒(g)', nitrogen_g: '氮气(g)', single_bottle_gross_no_cap: '毛重无盖(g)',
+            cap_g: '盖子(g)', single_bottle_gross_pet: 'PET毛重(g)', glue_g: '喷胶(g)',
+            shrink_film_g: '收缩膜(g)', straw_g: '吸管(g)', whole_bottle_gross_g: '整瓶毛重(g)',
+            color_box_g: '彩箱(g)', pearl_cotton_g: '珍珠棉(g)', handle_g: '手提扣(g)',
+            guide_card_g: '引流卡(g)', carton_g: '纸箱(g)', whole_box_gross_kg: '整箱毛重(kg)',
+            remarks: '备注', created_at: '更新时间'
+        };
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        async function loadData() {
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('dataTable').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+
+            try {
+                const { data, error } = await supabase
+                    .from('product_records')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                allData = data || [];
+                filteredData = [...allData];
+                updateStats();
+                updateSpecFilter();
+                applyFilters();
+
+                if (allData.length === 0) {
+                    document.getElementById('emptyState').style.display = 'block';
+                } else {
+                    document.getElementById('dataTable').style.display = 'table';
+                }
+            } catch (err) {
+                console.error('加载失败:', err);
+                showToast('❌ 数据加载失败：' + err.message, 'error');
+            } finally {
+                document.getElementById('loadingState').style.display = 'none';
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('totalCount').textContent = allData.length;
+            const trademarks = new Set(allData.map(d => d.trademark).filter(Boolean));
+            const products = new Set(allData.map(d => d.product_name + '|' + d.product_spec));
+            document.getElementById('trademarkCount').textContent = trademarks.size;
+            document.getElementById('productCount').textContent = products.size;
+        }
+
+        function updateSpecFilter() {
+            const brand = document.getElementById('filterBrand').value;
+            const pkg = document.getElementById('filterPackage').value;
+            
+            let specs = allData;
+            if (brand) specs = specs.filter(d => d.brand === brand);
+            if (pkg) specs = specs.filter(d => d.package_type === pkg);
+            
+            const uniqueSpecs = [...new Set(specs.map(d => d.product_spec).filter(Boolean))].sort();
+            const specSelect = document.getElementById('filterSpec');
+            const currentSpec = specSelect.value;
+            
+            specSelect.innerHTML = '<option value="">全部规格</option>' +
+                uniqueSpecs.map(s => `<option value="${s}">${s}</option>`).join('');
+            
+            if (currentSpec && uniqueSpecs.includes(currentSpec)) {
+                specSelect.value = currentSpec;
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const start = (currentPage - 1) * pageSize;
+            const pageData = filteredData.slice(start, start + pageSize);
+
+            tbody.innerHTML = pageData.map(row => {
+                const cells = columns.map(col => {
+                    let val = row[col];
+                    if (val === null || val === undefined) {
+                        return '<td class="empty-cell">-</td>';
+                    }
+                    if (col === 'created_at') {
+                        const date = new Date(val);
+                        val = date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    }
+                    if (['single_bottle_ml', 'density', 'single_bottle_net_weight', 'empty_bottle_g',
+                         'paper_box_g', 'nitrogen_g', 'single_bottle_gross_no_cap', 'cap_g',
+                         'single_bottle_gross_pet', 'glue_g', 'shrink_film_g', 'straw_g',
+                         'whole_bottle_gross_g', 'color_box_g', 'pearl_cotton_g', 'handle_g',
+                         'guide_card_g', 'carton_g', 'whole_box_gross_kg'].includes(col)) {
+                        return `<td class="number-cell">${parseFloat(val).toFixed(col === 'density' ? 4 : col === 'whole_box_gross_kg' ? 3 : 2)}</td>`;
+                    }
+                    return `<td>${val}</td>`;
+                }).join('');
+                return `<tr>${cells}</tr>`;
+            }).join('');
+
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const totalPages = Math.ceil(filteredData.length / pageSize);
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = `<button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+                } else if (i === currentPage - 3 || i === currentPage + 3) {
+                    html += `<span style="padding:6px;">...</span>`;
+                }
+            }
+            
+            html += `<button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            const totalPages = Math.ceil(filteredData.length / pageSize);
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            renderTable();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function applyFilters() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const brand = document.getElementById('filterBrand').value;
+            const packageType = document.getElementById('filterPackage').value;
+            const spec = document.getElementById('filterSpec').value;
+
+            filteredData = allData.filter(row => {
+                const matchSearch = !search || 
+                    (row.product_name && row.product_name.toLowerCase().includes(search)) ||
+                    (row.trademark && row.trademark.toLowerCase().includes(search)) ||
+                    (row.product_spec && row.product_spec.toLowerCase().includes(search)) ||
+                    (row.serial_no && row.serial_no.toLowerCase().includes(search)) ||
+                    (row.brand && row.brand.toLowerCase().includes(search));
+                
+                const matchBrand = !brand || row.brand === brand;
+                const matchPackage = !packageType || row.package_type === packageType;
+                const matchSpec = !spec || row.product_spec === spec;
+
+                return matchSearch && matchBrand && matchPackage && matchSpec;
+            });
+
+            currentPage = 1;
+            renderTable();
+            
+            const filteredStats = {
+                total: filteredData.length,
+                trademarks: new Set(filteredData.map(d => d.trademark).filter(Boolean)).size,
+                products: new Set(filteredData.map(d => d.product_name + '|' + d.product_spec)).size
+            };
+            document.getElementById('totalCount').textContent = filteredStats.total;
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterBrand').value = '';
+            document.getElementById('filterPackage').value = '';
+            document.getElementById('filterSpec').value = '';
+            updateSpecFilter();
+            applyFilters();
+            updateStats();
+            showToast('✅ 筛选条件已清空');
+        }
+
+        function exportCSV() {
+            if (filteredData.length === 0) {
+                showToast('没有可导出的数据', 'error');
+                return;
+            }
+
+            const headers = columns.map(col => columnLabels[col] || col);
+            const rows = filteredData.map(row => 
+                columns.map(col => {
+                    let val = row[col];
+                    if (val === null || val === undefined) return '';
+                    if (col === 'created_at') return new Date(val).toLocaleString('zh-CN');
+                    return String(val).replace(/,/g, ';');
+                }).join(',')
+            );
+
+            const csv = [headers.join(','), ...rows].join('\n');
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `产品净含量数据_${new Date().toLocaleDateString('zh-CN')}.csv`;
+            link.click();
+            showToast('✅ CSV 导出成功！');
+        }
+
+        function exportExcel() {
+            if (filteredData.length === 0) {
+                showToast('没有可导出的数据', 'error');
+                return;
+            }
+
+            const exportData = filteredData.map(row => {
+                const obj = {};
+                columns.forEach(col => {
+                    let val = row[col];
+                    if (col === 'created_at' && val) {
+                        val = new Date(val).toLocaleString('zh-CN');
+                    }
+                    obj[columnLabels[col] || col] = val;
+                });
+                return obj;
+            });
+
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '产品净含量数据');
+            XLSX.writeFile(wb, `产品净含量数据_${new Date().toLocaleDateString('zh-CN')}.xlsx`);
+            showToast('✅ Excel 导出成功！');
+        }
+
+        document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 300));
+        document.getElementById('filterBrand').addEventListener('change', () => {
+            updateSpecFilter();
+            applyFilters();
+        });
+        document.getElementById('filterPackage').addEventListener('change', () => {
+            updateSpecFilter();
+            applyFilters();
+        });
+        document.getElementById('filterSpec').addEventListener('change', applyFilters);
+
+        function debounce(fn, delay) {
+            let timer;
+            return function(...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        window.addEventListener('load', () => {
+            loadData();
+        });
+    </script>
+</body>
+</html>

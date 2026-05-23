@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>产品净含量信息录入</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header h1 { font-size: 22px; }
+        .header .brand-tag {
+            background: rgba(255,255,255,0.2);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .form-body { padding: 30px; }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .form-group label .required { color: #ef4444; }
+        .form-group input, .form-group select, .form-group textarea {
+            padding: 12px 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .form-group input[type="number"] { text-align: right; }
+        .form-group input.readonly {
+            background: #f3f4f6;
+            color: #6b7280;
+            cursor: not-allowed;
+        }
+        .search-hint {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .btn {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            text-decoration: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4); }
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .btn-secondary:hover { background: #e5e7eb; }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 500;
+            transform: translateX(400px);
+            transition: transform 0.3s;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: linear-gradient(135deg, #10b981, #059669); }
+        .toast.error { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .toast.info { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #374151;
+            margin: 24px 0 16px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-title::before {
+            content: "";
+            display: inline-block;
+            width: 4px;
+            height: 18px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+        .existing-badge {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .nav-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .nav-bar a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .nav-bar a:hover { text-decoration: underline; }
+        .nav-bar span { color: #9ca3af; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>📦 产品净含量信息录入</h1>
+            </div>
+            <div class="brand-tag" id="brandTag">加载中...</div>
+        </div>
+        <div class="form-body">
+            <div class="nav-bar">
+                <a href="index.html">🏠 首页</a>
+                <span>›</span>
+                <a href="index.html" id="navBrand">品牌</a>
+                <span>›</span>
+                <span id="navPackage" style="color:#374151;font-weight:600;">包装</span>
+            </div>
+
+            <form id="productForm">
+                <div class="section-title">基本信息</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>品牌归属</label>
+                        <input type="text" name="brand" id="brandInput" class="readonly" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>包装形式</label>
+                        <input type="text" name="package_type" id="packageInput" class="readonly" readonly>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>序号 <span class="required">*</span></label>
+                        <input type="text" name="serial_no" required placeholder="请输入序号">
+                    </div>
+                    <div class="form-group">
+                        <label>商标 <span class="required">*</span></label>
+                        <input type="text" name="trademark" required placeholder="请输入商标">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>产品名称 <span class="required">*</span></label>
+                        <input type="text" name="product_name" id="productName" required placeholder="输入后自动查询历史数据">
+                        <span class="search-hint">输入产品名称和规格后自动匹配历史记录</span>
+                    </div>
+                    <div class="form-group">
+                        <label>产品规格 <span class="required">*</span></label>
+                        <input type="text" name="product_spec" id="productSpec" required placeholder="如：500mL×12瓶">
+                    </div>
+                </div>
+
+                <div class="section-title">单瓶参数</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>单瓶 (mL)</label>
+                        <input type="number" name="single_bottle_ml" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>密度 (g/cm³)</label>
+                        <input type="number" name="density" step="0.0001" placeholder="0.0000">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>单瓶净重 (g)</label>
+                        <input type="number" name="single_bottle_net_weight" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>空瓶 (g)</label>
+                        <input type="number" name="empty_bottle_g" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="section-title">包装组件重量</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>纸盒 (g)</label>
+                        <input type="number" name="paper_box_g" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>氮气 (g)</label>
+                        <input type="number" name="nitrogen_g" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>单瓶毛重(g) 纸包无盖</label>
+                        <input type="number" name="single_bottle_gross_no_cap" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>盖子 (g)</label>
+                        <input type="number" name="cap_g" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>单瓶毛重(g) PET有盖无收缩膜</label>
+                        <input type="number" name="single_bottle_gross_pet" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>喷胶量 (g)</label>
+                        <input type="number" name="glue_g" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>收缩膜 (g)</label>
+                        <input type="number" name="shrink_film_g" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>吸管 (g)</label>
+                        <input type="number" name="straw_g" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>整瓶毛重 (g)</label>
+                        <input type="number" name="whole_bottle_gross_g" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="section-title">外箱及配件</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>彩箱 (g)</label>
+                        <input type="number" name="color_box_g" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>珍珠棉 (g)</label>
+                        <input type="number" name="pearl_cotton_g" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>手提扣 (g)</label>
+                        <input type="number" name="handle_g" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>引流卡 (g)</label>
+                        <input type="number" name="guide_card_g" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>纸箱 (g)</label>
+                        <input type="number" name="carton_g" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>整箱毛重 (kg)</label>
+                        <input type="number" name="whole_box_gross_kg" step="0.001" placeholder="0.000">
+                    </div>
+                </div>
+
+                <div class="section-title">其他</div>
+                <div class="form-row">
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>备注</label>
+                        <textarea name="remarks" rows="3" placeholder="如有特殊情况请在此说明..."></textarea>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">💾 提交数据</button>
+                    <button type="button" class="btn btn-secondary" onclick="resetForm()">🔄 清空表单</button>
+                    <a href="index.html" class="btn btn-secondary" style="display:flex;align-items:center;justify-content:center;">🏠 返回首页</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://qtwwwsnhvcmsrjwlIkui.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_izDCkTnyQPE9xVl2TEBL3g_brortZPS';
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let existingRecordId = null;
+        let isSearching = false;
+        let currentBrand = '';
+        let currentPackage = '';
+
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                brand: params.get('brand') || '',
+                package: params.get('package') || ''
+            };
+        }
+
+        function initPage() {
+            const params = getUrlParams();
+            currentBrand = params.brand;
+            currentPackage = params.package;
+
+            if (!currentBrand || !currentPackage) {
+                showToast('⚠️ 参数错误，请从首页进入', 'error');
+                setTimeout(() => window.location.href = 'index.html', 2000);
+                return;
+            }
+
+            document.getElementById('brandInput').value = currentBrand;
+            document.getElementById('packageInput').value = currentPackage;
+            document.getElementById('brandTag').textContent = currentBrand + ' · ' + currentPackage;
+            document.getElementById('navBrand').textContent = currentBrand;
+            document.getElementById('navPackage').textContent = currentPackage;
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        async function searchExistingRecord() {
+            const productName = document.getElementById('productName').value.trim();
+            const productSpec = document.getElementById('productSpec').value.trim();
+
+            if (!productName || !productSpec || isSearching) return;
+
+            isSearching = true;
+            const nameInput = document.getElementById('productName');
+            const originalPlaceholder = nameInput.placeholder;
+            nameInput.placeholder = '查询中...';
+
+            try {
+                const { data, error } = await supabase
+                    .from('product_records')
+                    .select('*')
+                    .eq('product_name', productName)
+                    .eq('product_spec', productSpec)
+                    .maybeSingle();
+
+                if (error) throw error;
+
+                if (data) {
+                    existingRecordId = data.id;
+                    fillForm(data);
+                    showToast('✅ 已找到历史记录，数据已填充，请修改后提交', 'info');
+                    
+                    const specLabel = document.querySelector('input[name="product_spec"]').previousElementSibling;
+                    if (!specLabel.querySelector('.existing-badge')) {
+                        specLabel.innerHTML += '<span class="existing-badge">已有记录</span>';
+                    }
+                } else {
+                    existingRecordId = null;
+                    const badge = document.querySelector('.existing-badge');
+                    if (badge) badge.remove();
+                }
+            } catch (err) {
+                console.error('查询失败:', err);
+            } finally {
+                isSearching = false;
+                nameInput.placeholder = originalPlaceholder;
+            }
+        }
+
+        function fillForm(data) {
+            const fields = [
+                'serial_no', 'trademark', 'product_name', 'product_spec',
+                'single_bottle_ml', 'density', 'single_bottle_net_weight', 'empty_bottle_g',
+                'paper_box_g', 'nitrogen_g', 'single_bottle_gross_no_cap', 'cap_g',
+                'single_bottle_gross_pet', 'glue_g', 'shrink_film_g', 'straw_g',
+                'whole_bottle_gross_g', 'color_box_g', 'pearl_cotton_g', 'handle_g',
+                'guide_card_g', 'carton_g', 'whole_box_gross_kg', 'remarks'
+            ];
+
+            fields.forEach(field => {
+                const input = document.querySelector(`[name="${field}"]`);
+                if (input && data[field] !== null && data[field] !== undefined) {
+                    input.value = data[field];
+                }
+            });
+        }
+
+        function getFormData() {
+            const form = document.getElementById('productForm');
+            const formData = new FormData(form);
+            const data = {};
+            
+            const numberFields = [
+                'single_bottle_ml', 'density', 'single_bottle_net_weight', 'empty_bottle_g',
+                'paper_box_g', 'nitrogen_g', 'single_bottle_gross_no_cap', 'cap_g',
+                'single_bottle_gross_pet', 'glue_g', 'shrink_film_g', 'straw_g',
+                'whole_bottle_gross_g', 'color_box_g', 'pearl_cotton_g', 'handle_g',
+                'guide_card_g', 'carton_g', 'whole_box_gross_kg'
+            ];
+
+            for (let [key, value] of formData.entries()) {
+                if (numberFields.includes(key)) {
+                    data[key] = value ? parseFloat(value) : null;
+                } else {
+                    data[key] = value || null;
+                }
+            }
+            return data;
+        }
+
+        document.getElementById('productForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = '提交中...';
+
+            try {
+                const data = getFormData();
+
+                if (existingRecordId) {
+                    const { error } = await supabase
+                        .from('product_records')
+                        .update(data)
+                        .eq('id', existingRecordId);
+
+                    if (error) throw error;
+                    showToast('✅ 数据更新成功！');
+                } else {
+                    const { error } = await supabase
+                        .from('product_records')
+                        .insert([data]);
+
+                    if (error) {
+                        if (error.message.includes('duplicate')) {
+                            showToast('⚠️ 该产品已存在，请刷新页面后重试', 'error');
+                        } else {
+                            throw error;
+                        }
+                        return;
+                    }
+                    showToast('✅ 数据提交成功！');
+                }
+
+                setTimeout(() => {
+                    const name = document.getElementById('productName').value;
+                    const spec = document.getElementById('productSpec').value;
+                    resetForm();
+                    document.getElementById('productName').value = name;
+                    document.getElementById('productSpec').value = spec;
+                    existingRecordId = null;
+                    const badge = document.querySelector('.existing-badge');
+                    if (badge) badge.remove();
+                }, 1500);
+
+            } catch (err) {
+                console.error('提交失败:', err);
+                showToast('❌ 提交失败：' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💾 提交数据';
+            }
+        });
+
+        function resetForm() {
+            const brand = document.getElementById('brandInput').value;
+            const pkg = document.getElementById('packageInput').value;
+            document.getElementById('productForm').reset();
+            document.getElementById('brandInput').value = brand;
+            document.getElementById('packageInput').value = pkg;
+            existingRecordId = null;
+            const badge = document.querySelector('.existing-badge');
+            if (badge) badge.remove();
+        }
+
+        let searchTimeout;
+        document.getElementById('productSpec').addEventListener('blur', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(searchExistingRecord, 300);
+        });
+
+        window.addEventListener('load', () => {
+            initPage();
+        });
+    </script>
+</body>
+</html>
